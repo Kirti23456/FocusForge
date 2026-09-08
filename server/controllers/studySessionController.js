@@ -3,7 +3,6 @@ const StudySession = require("../models/StudySession");
 // START SESSION
 const startSession = async (req, res) => {
   try {
-    // Check if user already has an active session
     const existingSession = await StudySession.findOne({
       user: req.user._id,
       status: "active",
@@ -11,6 +10,7 @@ const startSession = async (req, res) => {
 
     if (existingSession) {
       return res.status(400).json({
+        success: false,
         message: "A study session is already active",
         session: existingSession,
       });
@@ -37,30 +37,102 @@ const startSession = async (req, res) => {
   }
 };
 
-
 // STOP SESSION
 const stopSession = async (req, res) => {
   try {
+    const {
+      sessionId,
+      duration,
+      focusScore,
+      distractions,
+      phoneDetections,
+      sleepyCount,
+      noiseDistractions,
+      noiseLevel,
+      emotion,
+      bookDetected,
+    } = req.body;
+
+    // IMPORTANT:
+    // Session sirf current logged-in user ki hi milegi
     const session = await StudySession.findOne({
+      _id: sessionId,
       user: req.user._id,
       status: "active",
     });
 
     if (!session) {
       return res.status(404).json({
+        success: false,
         message: "No active study session found",
       });
     }
 
     const endTime = new Date();
 
-    const duration = Math.floor(
-      (endTime - session.startTime) / 1000
+    // Frontend duration use karenge.
+    // Isse paused time count nahi hoga.
+    const frontendDuration = Number(duration);
+
+    const finalDuration =
+      Number.isFinite(frontendDuration) && frontendDuration >= 0
+        ? Math.floor(frontendDuration)
+        : Math.floor((endTime - session.startTime) / 1000);
+
+    const finalFocusScore = Math.max(
+      0,
+      Math.min(100, Number(focusScore) || 0)
+    );
+
+    const finalDistractions = Math.max(
+      0,
+      Math.floor(Number(distractions) || 0)
+    );
+
+    const finalPhoneDetections = Math.max(
+      0,
+      Math.floor(Number(phoneDetections) || 0)
+    );
+
+    const finalSleepyCount = Math.max(
+      0,
+      Math.floor(Number(sleepyCount) || 0)
+    );
+
+    const finalNoiseDistractions = Math.max(
+      0,
+      Math.floor(Number(noiseDistractions) || 0)
+    );
+
+    const finalNoiseLevel = Math.max(
+      0,
+      Math.min(100, Number(noiseLevel) || 0)
     );
 
     session.endTime = endTime;
-    session.duration = duration;
+    session.duration = finalDuration;
     session.status = "completed";
+
+    session.focusScore = finalFocusScore;
+    session.distractionCount = finalDistractions;
+    session.phoneDetections = finalPhoneDetections;
+    session.sleepyCount = finalSleepyCount;
+    session.noiseDistractions = finalNoiseDistractions;
+    session.noiseLevel = finalNoiseLevel;
+
+    if (
+      [
+        "happy",
+        "neutral",
+        "sad",
+        "angry",
+        "surprised",
+      ].includes(emotion)
+    ) {
+      session.emotion = emotion;
+    }
+
+    session.bookDetected = Boolean(bookDetected);
 
     await session.save();
 
@@ -78,7 +150,6 @@ const stopSession = async (req, res) => {
     });
   }
 };
-
 
 // GET ACTIVE SESSION
 const getActiveSession = async (req, res) => {
@@ -102,14 +173,13 @@ const getActiveSession = async (req, res) => {
   }
 };
 
-
 // GET SESSION HISTORY
 const getSessions = async (req, res) => {
   try {
     const sessions = await StudySession.find({
       user: req.user._id,
       status: "completed",
-    }).sort({ createdAt: -1 });
+    }).sort({ startTime: -1 });
 
     res.status(200).json({
       success: true,
@@ -124,7 +194,6 @@ const getSessions = async (req, res) => {
     });
   }
 };
-
 
 module.exports = {
   startSession,
