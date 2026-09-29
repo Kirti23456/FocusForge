@@ -57,3 +57,7 @@ Backend API
 MongoDB
   ↓
 Reports & Analytics
+
+
+**Author Name**
+**Kirti Srivastava**
